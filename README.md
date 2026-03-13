@@ -1,219 +1,242 @@
-# Ransomware Detector
+<div align="center">
 
-End-to-end ransomware detection with local agents, centralized alerting, external device scanning, and a real-time dashboard — packaged as a cross-platform installable application.
+# 🛡️ RansomGuard
+
+**Real-time ransomware detection — monitor files, network, and USB drives across multiple machines from a single dashboard.**
+
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python)](https://python.org)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](#installation)
+[![License](https://img.shields.io/badge/License-MIT-green)](#license)
+
+</div>
 
 ---
 
-## Quick Install
+## ✨ What It Does
 
-### Linux / macOS
+RansomGuard watches your machines for ransomware activity and alerts you in real time:
+
+| Monitor | What It Detects |
+|---|---|
+| 📁 **Files** | Suspicious extensions (`.locked`, `.encrypted`), high-entropy (encrypted) content, bulk file renames |
+| 🌐 **Network** | Unusually high outbound connection counts |
+| 🔌 **USB Drives** | Auto-scans removable devices on insert |
+
+Alerts flow to a central server and appear instantly on a live web dashboard.
+
+---
+
+## 🚀 Quick Start
+
+### 🐧 Linux / macOS
 
 ```bash
-bash install.sh   # one-time setup: creates .venv, installs deps, copies config
-bash run.sh       # starts server + dashboard + opens browser automatically
+bash install.sh      # one-time setup (creates .venv, installs deps)
+bash run.sh          # starts server + dashboard, opens browser
 ```
 
-### Windows (CMD)
+### 🪟 Windows — EXE Installer *(easiest)*
+
+Build a one-click installer on any Windows machine (no Python knowledge needed):
 
 ```bat
-install.bat
-run.bat
+python windows\build.py
 ```
 
-### Windows (PowerShell)
+Produces `windows\dist\RansomGuard-Setup.exe` — a standard wizard installer.  
+After install, a 🛡️ **shield icon** appears in the system tray and the dashboard opens automatically.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File install.ps1
-run.bat
+> See [`windows/WINDOWS_BUILD.md`](windows/WINDOWS_BUILD.md) for full build instructions.
+
+### 🪟 Windows — Script
+
+```bat
+install.bat    :: one-time setup
+run.bat        :: start server + dashboard
 ```
 
-### Docker
+### 🐳 Docker
 
 ```bash
 docker compose up
-# Server    → http://localhost:5000
 # Dashboard → http://localhost:5001
+# API       → http://localhost:5000
 ```
-
-> After running, the **dashboard opens automatically** at `http://localhost:5001`.
-> To deploy only the server centrally, use Docker and point agents at its public IP.
 
 ---
 
-## CLI Commands (after install)
+## 🖥️ Dashboard
+
+Open **http://localhost:5001** after starting the app.
+
+| Section | What You See |
+|---|---|
+| **Dashboard** | Live stat cards (agents online, alert counts) + chart + recent alerts |
+| **Agents** | All connected machines with status, platform, last-seen time |
+| **Alerts** | Full alert history with filter by level / status / text search + Acknowledge button |
+
+Real-time WebSocket updates — new alerts pop up as toasts without refreshing.
+
+---
+
+## 🔧 CLI Commands
+
+After `bash install.sh` (or `install.bat`):
 
 | Command | Description |
 |---|---|
-| `rds-server` | Start the API server (port 5000) |
-| `rds-dashboard` | Start the web dashboard (port 5001) |
-| `rds-agent --config config.json` | Start an agent on a monitored machine |
+| `rds-server` | Start the API server on port 5000 |
+| `rds-dashboard` | Start the web dashboard on port 5001 |
+| `rds-agent --config config.json` | Start monitoring on a machine |
+| `bash run.sh` | Start server + dashboard together |
+| `python tests/smoke_test.py` | Run automated smoke test (7 checks) |
+| `python docs/generate_pdf.py` | Regenerate the PDF documentation |
 
 ---
 
+## ⚙️ Configuration
 
-## Features
-
-- File activity monitoring with real-time scanning (extensions, entropy, optional YARA/VT hooks).
-- External device (USB/external drives) detection and scanning on connect.
-- Network activity monitoring (connection count and throughput).
-- Central alert storage with WebSocket broadcast to dashboards.
-- Command channel for remote actions (isolate, scan external) with audit trail.
-- Optional cloud sync server, Telegram bot, and webhook receiver.
-- Mobile API endpoints for a lightweight client.
-
-## How It Works
-
-1. **Agent** runs on each monitored machine.
-   - Watches file system events and flags suspicious files.
-   - Tracks network activity and raises alerts on high connection counts.
-   - Detects removable drives and scans them on connect.
-   - Sends heartbeats and alerts to the central server.
-   - Polls for commands (isolate, scan) from the server.
-
-2. **Server** receives and stores alerts and agent status.
-   - REST API for alerts, stats, and commands.
-   - WebSocket broadcast for real-time dashboards.
-   - Computes aggregated statistics.
-   - Optional Firebase push notifications.
-
-3. **Dashboard** displays live stats and recent alerts.
-
-4. **Cloud server** (optional) syncs and exposes remote APIs for alerts/stats.
-
-## Project Structure
-
-```
-agents/                Agent runtime and monitors
-server/                Central API, detection engine, database
-ml_detector/           Real-time scanner hooks + model training
-utils/                 Entropy and portable device scanning
-dashboard/             Web dashboard + mobile API endpoints
-cloud/                 Cloud sync, Telegram bot, webhook server
-```
-
-## Requirements
-
-- Python 3.9+ recommended
-- For a quick local run, use the runtime set:
-
-```
-requirements.runtime.txt
-```
-
-For full feature set (ML stack, cloud, Telegram, plots), use:
-
-```
-requirements.txt
-```
-
-Note: Some packages are platform-specific (Windows/macOS) and are guarded with markers.
-
-## Configuration
-
-Copy the example config and edit as needed:
-
-```
-cp config.example.json config.json
-```
-
-Key settings:
-- `server_url`: API server URL
-- `agent_id`: unique ID for the agent
-- `watch_paths`: list of directories to monitor
-- `scan_on_connect`: scan external drives on connect
-- `entropy_threshold`: high entropy threshold
-- `file_change_rate_threshold`: alert on high file activity
-
-Optional environment variables:
-- `RDS_SERVER_URL`: override server URL
-- `RDS_AGENT_ID`: override agent ID
-- `VIRUS_TOTAL_API_KEY`: enable VirusTotal checks
-- `RDS_USER` / `RDS_PASSWORD`: API login credentials
-- `TELEGRAM_BOT_TOKEN`: Telegram bot
-
-## Run the System (Local)
-
-1. Create and activate a virtual environment:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-2. Install runtime dependencies:
-
-```bash
-pip install -r requirements.runtime.txt
-```
-
-3. Start the API server:
-
-```bash
-python -m server.main_server
-```
-
-4. Start the dashboard (new terminal):
-
-```bash
-python -m dashboard.app
-```
-
-5. Start an agent (new terminal):
+Copy the example config and edit:
 
 ```bash
 cp config.example.json config.json
-python -m agents.agent_client --config config.json
 ```
 
-The dashboard will query the server every 5 seconds for stats and recent alerts.
+Key settings in `config.json`:
 
-## Optional Components
+| Setting | Default | Description |
+|---|---|---|
+| `server_url` | `http://localhost:5000` | Where agents send alerts |
+| `agent_id` | hostname | Unique name for this machine |
+| `watch_paths` | `["."]` | Folders to monitor |
+| `heartbeat_interval` | `5` | Agent check-in interval (seconds) |
+| `entropy_threshold` | `7.5` | Flag files above this entropy (0‒8) |
+| `file_change_rate_threshold` | `120` | Alert above this many changes/minute |
+| `enable_file_monitor` | `true` | Toggle file monitoring |
+| `enable_network_monitor` | `true` | Toggle network monitoring |
+| `enable_external_device_monitor` | `true` | Toggle USB monitoring |
 
-- Cloud sync server:
+### Environment Variables
 
 ```bash
-python -m server.cloud_server
+RDS_SERVER_HOST=0.0.0.0        # bind server to all interfaces
+RDS_SERVER_PORT=5000
+RDS_DASHBOARD_HOST=0.0.0.0
+RDS_DASHBOARD_PORT=5001
+RDS_DATA_DIR=/path/to/data     # where data.db is stored
+RDS_SECRET_KEY=your-secret     # set in production
+RDS_USER=admin                 # API login
+RDS_PASSWORD=admin
+VIRUS_TOTAL_API_KEY=...        # optional
+TELEGRAM_BOT_TOKEN=...         # optional
 ```
 
-- Webhook receiver:
+---
 
+## 🏗️ Project Structure
+
+```
+ransomware-detector/
+│
+├── install.sh / install.bat / install.ps1  ← One-time setup
+├── run.sh / run.bat                         ← Launch server + dashboard
+├── pyproject.toml                           ← Python package (rds-* CLI commands)
+├── config.example.json                      ← Default configuration template
+│
+├── launcher/
+│   └── main.py                              ← Windows tray app (starts all services)
+│
+├── windows/                                 ← Windows EXE build pipeline
+│   ├── build.py                             ← Run on Windows to produce Setup.exe
+│   ├── RansomGuard.spec                     ← PyInstaller bundle config
+│   ├── setup.iss                            ← Inno Setup installer script
+│   └── WINDOWS_BUILD.md                     ← Build instructions
+│
+├── agents/                                  ← Monitoring agent
+│   ├── agent_client.py                      ← Main agent loop
+│   ├── file_monitor.py                      ← Watchdog file watcher
+│   ├── network_monitor.py                   ← psutil connection monitor
+│   └── external_device_monitor.py           ← USB scanner
+│
+├── server/                                  ← Central API server
+│   ├── main_server.py                       ← Flask + Socket.IO + JWT
+│   ├── database.py                          ← SQLite layer (alerts/agents/commands)
+│   ├── alert_system.py                      ← Alert management
+│   └── detection_engine.py                  ← Aggregate statistics
+│
+├── dashboard/                               ← Web UI
+│   ├── app.py                               ← Flask server
+│   └── templates/index.html                 ← Single-page dashboard
+│
+├── utils/                                   ← Shared helpers
+│   ├── config.py                            ← Config loader (json + env vars)
+│   ├── entropy_calculator.py                ← Shannon entropy scorer
+│   └── portable_scanner.py                  ← Folder scanner
+│
+├── ml_detector/                             ← Optional ML scanning
+│   ├── realtime_scanner.py
+│   ├── train_model.py
+│   └── virus_total_api.py
+│
+├── cloud/                                   ← Optional integrations
+│   ├── firebase_config.py
+│   ├── telegram_bot.py
+│   └── webhook_server.py
+│
+├── tests/
+│   └── smoke_test.py                        ← Automated API smoke test
+│
+├── docs/
+│   ├── DOCUMENTATION.md                     ← Full user guide
+│   ├── DOCUMENTATION.pdf                    ← Generated PDF
+│   └── generate_pdf.py                      ← PDF generator script
+│
+└── Dockerfile / docker-compose.yml          ← Container deployment
+```
+
+---
+
+## 📡 API Reference
+
+Base URL: `http://localhost:5000`
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/agents/heartbeat` | Agent check-in |
+| `GET` | `/api/agents` | List all agents |
+| `POST` | `/api/alerts` | Submit alert |
+| `GET` | `/api/alerts/recent?limit=50` | Recent alerts |
+| `POST` | `/api/alert/<id>/acknowledge` | Mark alert resolved |
+| `GET` | `/api/stats` | Dashboard summary |
+| `POST` | `/api/device/<id>/isolate` | Isolate an agent |
+| `POST` | `/api/scan/external` | Trigger USB scan |
+| `GET` | `/api/commands/<agent_id>` | Poll pending commands |
+
+---
+
+## 📄 Documentation
+
+Full user guide with architecture diagrams, step-by-step installation, configuration reference, and troubleshooting:
+
+- **Markdown:** [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md)
+- **PDF:** [`docs/DOCUMENTATION.pdf`](docs/DOCUMENTATION.pdf)
+
+Regenerate the PDF anytime:
 ```bash
-python -m cloud.webhook_server
+python docs/generate_pdf.py
 ```
 
-- Telegram bot:
+---
 
-```bash
-export TELEGRAM_BOT_TOKEN=your_token
-python -m cloud.telegram_bot
-```
+## 📋 Notes
 
-## Main API Endpoints
+- Device isolation is a safe simulation — no destructive actions.
+- VirusTotal scanning is optional and rate-limited by your API key.
+- On Linux, USB detection uses `pyudev` if installed, otherwise falls back to polling.
+- `install.sh --full` adds optional ML / cloud / Telegram packages.
 
-- `POST /api/agents/heartbeat`
-- `GET /api/agents`
-- `POST /api/alerts`
-- `GET /api/alerts/recent?limit=50`
-- `POST /api/alert/<id>/acknowledge`
-- `GET /api/stats`
-- `POST /api/device/<id>/isolate`
-- `POST /api/scan/external`
-- `GET /api/commands/<agent_id>`
-- `POST /api/commands/<id>/complete`
-
-## Notes and Limitations
-
-- Device isolation is a safe simulation; no destructive network actions are performed by default.
-- VirusTotal checks are optional and rate-limited by your API key.
-- On Linux, external drive detection uses `pyudev` if available; otherwise it falls back to polling.
-
-## Troubleshooting
-
-- If installs fail on heavy ML packages, run with `requirements.runtime.txt` first.
-- If binding to `0.0.0.0` is not permitted, set host via:
-  - `RDS_SERVER_HOST=127.0.0.1`
-  - `RDS_DASHBOARD_HOST=127.0.0.1`
+---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) for details.
