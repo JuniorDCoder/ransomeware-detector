@@ -23,7 +23,7 @@ windows/dist/
 ### 2. Clone and Install
 
 ```bat
-git clone <your-repo-url> RansomGuard
+git clone https://github.com/JuniorDCoder/ransomeware-detector.git RansomGuard
 cd RansomGuard
 install.bat
 ```

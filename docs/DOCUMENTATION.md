@@ -119,11 +119,12 @@ You should see something like `Python 3.11.5`. If you see `Python 2.x`, try `pyt
 
 ### A. Linux/macOS
 
-**Step 1 — Open a terminal** in the project folder.
+**Step 1 — Download the project**
 
-If you downloaded a zip, extract it first, then:
+Open a terminal and clone the repository:
 ```bash
-cd ransomware-detector
+git clone https://github.com/JuniorDCoder/ransomeware-detector.git
+cd ransomeware-detector
 ```
 
 **Step 2 — Run the installer:**
@@ -163,10 +164,13 @@ Press `Ctrl + C` to stop everything.
 
 ### B. Windows (Script)
 
-**Step 1 — Open Command Prompt** (search "cmd" in the Start menu) and navigate to the project folder:
+**Step 1 — Download the project**
+
+Open Command Prompt (search "cmd" in the Start menu) and clone the repository:
 
 ```bat
-cd C:\path\to\ransomware-detector
+git clone https://github.com/JuniorDCoder/ransomeware-detector.git
+cd ransomeware-detector
 ```
 
 **Step 2 — Run the installer:**

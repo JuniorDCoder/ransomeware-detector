@@ -12,7 +12,7 @@
 #define MyAppName      "RansomGuard"
 #define MyAppVersion   "1.0.0"
 #define MyAppPublisher "RansomGuard Project"
-#define MyAppURL       "https://github.com/your-org/ransomware-detector"
+#define MyAppURL       "https://github.com/JuniorDCoder/ransomeware-detector"
 #define MyAppExeName   "RansomGuard.exe"
 #define MySourceDir    "..\windows\dist\RansomGuardApp"
 

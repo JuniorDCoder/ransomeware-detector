@@ -28,6 +28,12 @@ Alerts flow to a central server and appear instantly on a live web dashboard.
 
 ## 🚀 Quick Start
 
+First, clone the repository:
+```bash
+git clone https://github.com/JuniorDCoder/ransomeware-detector.git
+cd ransomeware-detector
+```
+
 ### 🐧 Linux / macOS
 
 ```bash
