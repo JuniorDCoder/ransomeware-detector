@@ -1,0 +1,25 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rds-server
+    environment:
+      RDS_SERVER_HOST: "0.0.0.0"
+      RDS_SERVER_PORT: "5000"
+      RDS_DASHBOARD_HOST: "0.0.0.0"
+      RDS_DASHBOARD_PORT: "5001"
+      RDS_USER: "${RDS_USER:-admin}"
+      RDS_PASSWORD: "${RDS_PASSWORD:-admin}"
+      RDS_SECRET_KEY: "${RDS_SECRET_KEY:-}"
+      RDS_JWT_SECRET_KEY: "${RDS_JWT_SECRET_KEY:-}"
+    ports:
+      - "${RDS_SERVER_PORT:-5000}:5000"   # API server
+      - "${RDS_DASHBOARD_PORT:-5001}:5001" # Dashboard
+    volumes:
+      - rds-data:/app/data               # Persistent database
+    restart: unless-stopped
+
+volumes:
+  rds-data:
+    driver: local

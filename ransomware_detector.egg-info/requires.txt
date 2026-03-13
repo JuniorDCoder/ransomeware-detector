@@ -1,0 +1,29 @@
+flask==2.3.3
+flask-socketio==5.3.4
+flask-cors==4.0.0
+flask-jwt-extended==4.5.2
+python-socketio==5.9.0
+eventlet==0.33.3
+requests==2.31.0
+psutil==5.9.5
+watchdog==3.0.0
+
+[:platform_system == "Linux"]
+pyudev==0.24.0
+
+[:platform_system == "Windows"]
+pywin32==306
+wmi==1.5.1
+
+[full]
+firebase-admin==6.2.0
+python-telegram-bot==20.6
+scikit-learn==1.3.0
+pandas==2.0.3
+numpy==1.24.3
+joblib==1.3.2
+vt-py==0.17.0
+sqlalchemy==2.0.19
+matplotlib==3.7.2
+plotly==5.17.0
+cryptography==41.0.7

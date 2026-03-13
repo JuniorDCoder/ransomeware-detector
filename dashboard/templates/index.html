@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Ransomware Detection Dashboard — live telemetry, alerts, and device posture" />
+  <title>Ransomware Detector — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Design tokens ────────────────────────────────────────────── */
+    :root {
+      --bg: #0a0f1e;
+      --surface: #111827;
+      --surface2: #1a2236;
+      --border: rgba(255, 255, 255, .06);
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #6366f1;
+      --accent-g: linear-gradient(135deg, #6366f1, #818cf8);
+      --teal: #14b8a6;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --green: #22c55e;
+      --radius: 14px;
+      --sidebar-w: 220px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, .4);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Sidebar ──────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 12px;
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 100;
+      transition: transform .25s ease;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent-g);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .brand-text {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted);
+      transition: background .2s, color .2s;
+      text-decoration: none;
+    }
+
+    .nav-item:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    .nav-item.active {
+      background: rgba(99, 102, 241, .15);
+      color: #818cf8;
+    }
+
+    .nav-icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Connection badge ─────────────────────────────────────────── */
+    .conn-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--surface2);
+    }
+
+    .conn-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      transition: background .4s;
+    }
+
+    .conn-dot.online {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+
+    .conn-label {
+      color: var(--muted);
+    }
+
+    /* ── Main content ─────────────────────────────────────────────── */
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 28px 0;
+    }
+
+    .topbar-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .topbar-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .last-updated {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pulse {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: .4;
+        transform: scale(.7);
+      }
+    }
+
+    /* ── Alert toast ─────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--red);
+      border-radius: 10px;
+      padding: 12px 16px;
+      max-width: 340px;
+      box-shadow: var(--shadow);
+      animation: slideIn .3s ease;
+      font-size: 13px;
+    }
+
+    .toast-title {
+      font-weight: 600;
+      margin-bottom: 3px;
+      color: #f87171;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(110%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* ── Stat cards ──────────────────────────────────────────────── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 24px 28px 0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: transform .2s, box-shadow .2s;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+
+    .card-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .card-value {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .card.accent-indigo .card-value {
+      color: #818cf8;
+    }
+
+    .card.accent-teal .card-value {
+      color: var(--teal);
+    }
+
+    .card.accent-amber .card-value {
+      color: var(--amber);
+    }
+
+    .card.accent-red .card-value {
+      color: var(--red);
+    }
+
+    /* ── Chart + agents row ──────────────────────────────────────── */
+    .mid-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px 28px 0;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .badge-indigo {
+      background: rgba(99, 102, 241, .2);
+      color: #818cf8;
+    }
+
+    /* ── Agents table ────────────────────────────────────────────── */
+    .agents-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .agents-table th {
+      text-align: left;
+      padding: 8px 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .agents-table td {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .agents-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .status-dot.online {
+      background: var(--green);
+      box-shadow: 0 0 5px var(--green);
+    }
+
+    .status-dot.offline {
+      background: var(--muted);
+    }
+
+    /* ── Alerts table ────────────────────────────────────────────── */
+    .alerts-section {
+      padding: 16px 28px 32px;
+    }
+
+    .alerts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .alerts-table th {
+      text-align: left;
+      padding: 10px 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .alerts-table td {
+      padding: 11px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .alerts-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .alerts-table tr {
+      transition: background .15s;
+    }
+
+    .alerts-table tr:hover td {
+      background: rgba(255, 255, 255, .02);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    .pill-critical {
+      background: rgba(239, 68, 68, .15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, .3);
+    }
+
+    .pill-warning {
+      background: rgba(245, 158, 11, .15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, .3);
+    }
+
+    .pill-info {
+      background: rgba(20, 184, 166, .15);
+      color: #2dd4bf;
+      border: 1px solid rgba(20, 184, 166, .3);
+    }
+
+    .ack-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+
+    .ack-btn:hover {
+      border-color: var(--accent);
+      color: #818cf8;
+    }
+
+    .ack-btn:disabled {
+      opacity: .4;
+      cursor: default;
+    }
+
+    .ack-done {
+      opacity: .45;
+      font-size: 11px;
+      color: var(--green);
+    }
+
+    .empty-row td {
+      color: var(--muted);
+      padding: 20px 8px;
+    }
+
+    /* ── Mobile / responsive ─────────────────────────────────────── */
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .5);
+      z-index: 99;
+    }
+
+    .overlay.open {
+      display: block;
+    }
+
+    @media (max-width: 900px) {
+      .mid-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .main {
+        margin-left: 0;
+      }
+
+      .menu-toggle {
+        display: block;
+      }
+
+      .topbar {
+        padding: 16px 16px 0;
+      }
+
+      .cards {
+        padding: 16px 16px 0;
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .mid-row {
+        padding: 12px 16px 0;
+      }
+
+      .alerts-section {
+        padding: 12px 16px 24px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Mobile overlay -->
+  <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+  <!-- ─── Sidebar ──────────────────────────────────────────────────── -->
+  <nav class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-icon">🛡️</div>
+      <div>
+        <div class="brand-text">RansomGuard</div>
+        <div class="brand-sub">Detection Platform</div>
+      </div>
+    </div>
+
+    <a class="nav-item active" id="nav-dashboard" href="#dashboard" onclick="showSection('dashboard')">
+      <span class="nav-icon">📊</span> Dashboard
+    </a>
+    <a class="nav-item" id="nav-agents" href="#agents" onclick="showSection('agents')">
+      <span class="nav-icon">🖥️</span> Agents
+    </a>
+    <a class="nav-item" id="nav-alerts" href="#alerts" onclick="showSection('alerts')">
+      <span class="nav-icon">🔔</span> Alerts
+    </a>
+
+    <div class="sidebar-footer">
+      <div class="conn-badge">
+        <div class="conn-dot" id="connDot"></div>
+        <span class="conn-label" id="connLabel">Connecting…</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ─── Main ─────────────────────────────────────────────────────── -->
+  <div class="main">
+    <!-- Top bar -->
+    <div class="topbar">
+      <div>
+        <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      </div>
+      <div style="flex:1; padding-left: 12px;">
+        <div class="topbar-title" id="pageTitle">Dashboard</div>
+        <div class="topbar-sub">Live telemetry and device posture</div>
+      </div>
+      <div class="last-updated">
+        <span class="pulse"></span>
+        <span id="lastUpdated">Updating…</span>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Dashboard                                         -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div id="sec-dashboard">
+      <!-- Stat cards -->
+      <div class="cards">
+        <div class="card accent-indigo">
+          <div class="card-label">Agents Online</div>
+          <div class="card-value" id="metricAgents">0</div>
+          <div class="card-sub">Active endpoints</div>
+        </div>
+        <div class="card accent-teal">
+          <div class="card-label">Total Alerts</div>
+          <div class="card-value" id="metricTotal">0</div>
+          <div class="card-sub">All time</div>
+        </div>
+        <div class="card accent-amber">
+          <div class="card-label">Warnings</div>
+          <div class="card-value" id="metricWarn">0</div>
+          <div class="card-sub">In last 500 alerts</div>
+        </div>
+        <div class="card accent-red">
+          <div class="card-label">Critical</div>
+          <div class="card-value" id="metricCrit">0</div>
+          <div class="card-sub">Require attention</div>
+        </div>
+      </div>
+      <!-- Chart + mini agents -->
+      <div class="mid-row">
+        <div class="panel">
+          <div class="panel-title">📈 Alert Distribution</div>
+          <canvas id="alertChart" height="180"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-title">
+            🖥️ Recent Agents
+            <span class="badge badge-indigo" id="agentsBadge">0</span>
+          </div>
+          <table class="agents-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+                <th>Platform</th>
+              </tr>
+            </thead>
+            <tbody id="agentsTbody">
+              <tr class="empty-row">
+                <td colspan="4">No agents yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Recent alerts preview -->
+      <div class="alerts-section">
+        <div class="panel">
+          <div class="panel-title">🔔 Recent Alerts <span class="badge badge-indigo" id="alertsBadge">0</span>
+            <a href="#alerts" onclick="showSection('alerts')"
+              style="margin-left:auto;font-size:12px;color:#818cf8;text-decoration:none;">View all →</a>
+          </div>
+          <table class="alerts-table">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th>Type</th>
+                <th>Message</th>
+                <th>Agent</th>
+                <th>Time</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="alertsTbody">
+              <tr class="empty-row">
+                <td colspan="6">No alerts yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Agents (full page)                               -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div id="sec-agents" style="display:none;">
+      <div class="alerts-section">
+        <div class="panel">
+          <div class="panel-title">🖥️ All Agents <span class="badge badge-indigo" id="agentsBadge2">0</span></div>
+          <table class="agents-table">
+            <thead>
+              <tr>
+                <th>Agent ID</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+                <th>Platform</th>
+                <th>Python</th>
+                <th>Network Conns</th>
+              </tr>
+            </thead>
+            <tbody id="agentsFullTbody">
+              <tr class="empty-row">
+                <td colspan="6">No agents connected yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Alerts (full page)                               -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div id="sec-alerts" style="display:none;">
+      <div class="alerts-section">
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <select id="filterLevel" onchange="applyFilter()"
+            style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px;">
+            <option value="">All Levels</option>
+            <option value="CRITICAL">CRITICAL</option>
+            <option value="WARNING">WARNING</option>
+            <option value="INFO">INFO</option>
+          </select>
+          <select id="filterAck" onchange="applyFilter()"
+            style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px;">
+            <option value="">All Status</option>
+            <option value="unacked">Unacknowledged</option>
+            <option value="acked">Acknowledged</option>
+          </select>
+          <input id="filterText" oninput="applyFilter()" placeholder="Search message…"
+            style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px;flex:1;min-width:160px;" />
+        </div>
+        <div class="panel">
+          <div class="panel-title">🔔 All Alerts <span class="badge badge-indigo" id="alertsBadge2">0</span></div>
+          <table class="alerts-table">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th>Type</th>
+                <th>Message</th>
+                <th>Agent</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="alertsFullTbody">
+              <tr class="empty-row">
+                <td colspan="7">No alerts yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ─── Script ───────────────────────────────────────────────────── -->
+  <script>
+    const SERVER_URL = "{{ server_url }}";
+
+    // ── Chart setup ────────────────────────────────────────────────
+    const chartCtx = document.getElementById("alertChart").getContext("2d");
+    const alertChart = new Chart(chartCtx, {
+      type: "bar",
+      data: {
+        labels: ["INFO", "WARNING", "CRITICAL"],
+        datasets: [{
+          label: "Alerts",
+          data: [0, 0, 0],
+          backgroundColor: ["rgba(20,184,166,.6)", "rgba(245,158,11,.6)", "rgba(239,68,68,.6)"],
+          borderColor: ["rgba(20,184,166,1)", "rgba(245,158,11,1)", "rgba(239,68,68,1)"],
+          borderWidth: 1,
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: "rgba(255,255,255,.05)" }, ticks: { color: "#64748b" } },
+          y: { grid: { color: "rgba(255,255,255,.05)" }, ticks: { color: "#64748b", precision: 0 }, beginAtZero: true }
+        }
+      }
+    });
+
+    // ── Navigation ─────────────────────────────────────────────────
+    const SECTIONS = ["dashboard", "agents", "alerts"];
+    const PAGE_TITLES = { dashboard: "Dashboard", agents: "Agents", alerts: "Alerts" };
+    const PAGE_SUBS = {
+      dashboard: "Live telemetry and device posture",
+      agents: "All monitored endpoints",
+      alerts: "Full alert history"
+    };
+
+    let currentSection = "dashboard";
+
+    function showSection(name) {
+      if (!SECTIONS.includes(name)) name = "dashboard";
+      currentSection = name;
+
+      // Update nav active
+      SECTIONS.forEach(s => {
+        const el = document.getElementById("nav-" + s);
+        if (el) el.classList.toggle("active", s === name);
+      });
+
+      // Show/hide content sections
+      SECTIONS.forEach(s => {
+        const el = document.getElementById("sec-" + s);
+        if (el) el.style.display = (s === name) ? "" : "none";
+      });
+
+      // Update page title
+      document.getElementById("pageTitle").textContent = PAGE_TITLES[name] || name;
+      document.querySelector(".topbar-sub").textContent = PAGE_SUBS[name] || "";
+
+      // Update URL hash without scroll
+      history.replaceState(null, "", "#" + name);
+      closeSidebar();
+    }
+
+    // Handle direct link / page reload with hash
+    (function initRouteFromHash() {
+      const hash = (location.hash || "").replace("#", "");
+      if (SECTIONS.includes(hash)) showSection(hash);
+    })();
+
+    function toggleSidebar() {
+      const sb = document.getElementById("sidebar");
+      const ov = document.getElementById("overlay");
+      sb.classList.toggle("open");
+      ov.classList.toggle("open");
+    }
+    function closeSidebar() {
+      document.getElementById("sidebar").classList.remove("open");
+      document.getElementById("overlay").classList.remove("open");
+    }
+
+    // ── Toasts ─────────────────────────────────────────────────────
+    function showToast(alert) {
+      const container = document.getElementById("toastContainer");
+      const t = document.createElement("div");
+      t.className = "toast";
+      t.innerHTML = `
+      <div class="toast-title">⚠️ ${alert.level}: ${alert.type || "Alert"}</div>
+      <div>${alert.message || ""}</div>
+      <div style="color:#64748b;font-size:11px;margin-top:4px;">Agent: ${alert.agent_id || "unknown"}</div>
+    `;
+      container.appendChild(t);
+      setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .4s"; setTimeout(() => t.remove(), 400); }, 6000);
+    }
+
+    // ── Socket.IO ──────────────────────────────────────────────────
+    let socket;
+    try {
+      socket = io(SERVER_URL, { transports: ["websocket", "polling"] });
+
+      socket.on("connect", () => {
+        document.getElementById("connDot").classList.add("online");
+        document.getElementById("connLabel").textContent = "Connected";
+      });
+      socket.on("disconnect", () => {
+        document.getElementById("connDot").classList.remove("online");
+        document.getElementById("connLabel").textContent = "Disconnected";
+      });
+      socket.on("alert", (data) => {
+        showToast(data);
+        refresh();
+      });
+      socket.on("critical_alert", (data) => {
+        showToast(data);
+        refresh();
+      });
+    } catch (e) {
+      document.getElementById("connLabel").textContent = "No live feed";
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────
+    function pillClass(level) {
+      if (level === "CRITICAL") return "pill pill-critical";
+      if (level === "WARNING") return "pill pill-warning";
+      return "pill pill-info";
+    }
+
+    function fmtTime(ts) {
+      if (!ts) return "—";
+      const d = new Date(ts * 1000);
+      return d.toLocaleString();
+    }
+
+    function timeSince(ts) {
+      if (!ts) return "never";
+      const diff = Math.floor(Date.now() / 1000 - ts);
+      if (diff < 60) return `${diff}s ago`;
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      return `${Math.floor(diff / 3600)}h ago`;
+    }
+
+    // ── Acknowledge alert ──────────────────────────────────────────
+    async function ackAlert(id, btn) {
+      btn.disabled = true;
+      try {
+        await fetch(`${SERVER_URL}/api/alert/${id}/acknowledge`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: "dashboard" })
+        });
+        btn.parentElement.innerHTML = '<span class="ack-done">✔ Acknowledged</span>';
+      } catch { btn.disabled = false; }
+    }
+    window.ackAlert = ackAlert;
+
+    // ── Main refresh ───────────────────────────────────────────────
+    async function refresh() {
+      try {
+        // Stats
+        const sr = await fetch(`${SERVER_URL}/api/stats`);
+        const stats = await sr.json();
+
+        const byLevel = stats.alerts_by_level || {};
+        document.getElementById("metricAgents").textContent = stats.agents_online || 0;
+        document.getElementById("metricTotal").textContent = stats.total_alerts || 0;
+        document.getElementById("metricWarn").textContent = byLevel.WARNING || 0;
+        document.getElementById("metricCrit").textContent = byLevel.CRITICAL || 0;
+
+        // Chart
+        alertChart.data.datasets[0].data = [byLevel.INFO || 0, byLevel.WARNING || 0, byLevel.CRITICAL || 0];
+        alertChart.update("none");
+
+        // ── Agents ──────────────────────────────────────────────────
+        const ar = await fetch(`${SERVER_URL}/api/agents`);
+        const agData = await ar.json();
+        const agents = agData.agents || {};
+        const agentEntries = Object.entries(agents);
+
+        document.getElementById("agentsBadge").textContent = agentEntries.length;
+        document.getElementById("agentsBadge2").textContent = agentEntries.length;
+
+        const now = Date.now() / 1000;
+
+        // Dashboard: mini agents panel
+        const atbody = document.getElementById("agentsTbody");
+        if (!agentEntries.length) {
+          atbody.innerHTML = '<tr class="empty-row"><td colspan="4">No agents connected</td></tr>';
+        } else {
+          atbody.innerHTML = agentEntries.map(([id, info]) => {
+            const online = (now - (info.last_seen || 0)) <= 60;
+            const platform = (info.data?.system?.platform || "—").split("-")[0];
+            return `<tr>
+              <td style="font-family:monospace;font-size:12px;">${id}</td>
+              <td><span class="status-dot ${online ? "online" : "offline"}"></span>${online ? "Online" : "Offline"}</td>
+              <td>${timeSince(info.last_seen)}</td>
+              <td style="color:var(--muted)">${platform}</td>
+            </tr>`;
+          }).join("");
+        }
+
+        // Agents page: full table with extra columns
+        const afbody = document.getElementById("agentsFullTbody");
+        if (!agentEntries.length) {
+          afbody.innerHTML = '<tr class="empty-row"><td colspan="6">No agents connected yet</td></tr>';
+        } else {
+          afbody.innerHTML = agentEntries.map(([id, info]) => {
+            const online = (now - (info.last_seen || 0)) <= 60;
+            const platform = (info.data?.system?.platform || "—").split("-")[0];
+            const python = info.data?.system?.python || "—";
+            const netConns = info.data?.stats?.network?.connections ?? "—";
+            return `<tr>
+              <td style="font-family:monospace;font-size:12px;">${id}</td>
+              <td><span class="status-dot ${online ? "online" : "offline"}"></span>${online ? "Online" : "Offline"}</td>
+              <td>${timeSince(info.last_seen)}</td>
+              <td style="color:var(--muted)">${platform}</td>
+              <td style="color:var(--muted)">${python}</td>
+              <td style="color:var(--muted)">${netConns}</td>
+            </tr>`;
+          }).join("");
+        }
+
+        // ── Alerts ──────────────────────────────────────────────────
+        const alr = await fetch(`${SERVER_URL}/api/alerts/recent?limit=200`);
+        const alData = await alr.json();
+        const allAlerts = alData.alerts || [];
+
+        document.getElementById("alertsBadge").textContent = Math.min(allAlerts.length, 10);
+        document.getElementById("alertsBadge2").textContent = allAlerts.length;
+
+        // Dashboard preview — first 10 rows
+        const tbody = document.getElementById("alertsTbody");
+        const preview = allAlerts.slice(0, 10);
+        tbody.innerHTML = preview.length
+          ? preview.map(a => alertRow(a, false)).join("")
+          : '<tr class="empty-row"><td colspan="6">No alerts yet</td></tr>';
+
+        // Store for filter; render full table
+        window._allAlerts = allAlerts;
+        renderFullAlerts(allAlerts);
+
+        // Connection status
+        if (!socket?.connected) {
+          document.getElementById("connDot").classList.remove("online");
+          document.getElementById("connLabel").textContent = "Polling";
+        }
+        document.getElementById("lastUpdated").textContent =
+          "Updated " + new Date().toLocaleTimeString();
+
+      } catch (e) {
+        document.getElementById("lastUpdated").textContent = "Update failed — retrying…";
+      }
+    }
+
+    // ── Alert row builder ───────────────────────────────────────────
+    // fullPage=true → 7 cols (adds Status col); false → 6 cols (preview)
+    function alertRow(a, fullPage) {
+      const ackBtn = a.acknowledged
+        ? '<span class="ack-done">✔ Done</span>'
+        : `<button class="ack-btn" onclick="ackAlert(${a.id},this)">Acknowledge</button>`;
+      const statusCol = fullPage
+        ? `<td>${a.acknowledged
+          ? '<span class="ack-done">Acknowledged</span>'
+          : '<span style="color:var(--muted)">Open</span>'}</td>`
+        : "";
+      return `<tr>
+        <td><span class="${pillClass(a.level)}">${a.level}</span></td>
+        <td style="color:var(--muted);font-size:12px;">${a.type || "—"}</td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.message || ""}</td>
+        <td style="font-family:monospace;font-size:12px;">${a.agent_id || "—"}</td>
+        <td style="color:var(--muted);white-space:nowrap;">${fmtTime(a.timestamp)}</td>
+        ${statusCol}
+        <td>${ackBtn}</td>
+      </tr>`;
+    }
+
+    // ── Render full alerts table ────────────────────────────────────
+    function renderFullAlerts(alerts) {
+      const tbody = document.getElementById("alertsFullTbody");
+      tbody.innerHTML = alerts.length
+        ? alerts.map(a => alertRow(a, true)).join("")
+        : '<tr class="empty-row"><td colspan="7">No alerts yet</td></tr>';
+    }
+
+    // ── Filter: Alerts page ─────────────────────────────────────────
+    function applyFilter() {
+      const level = document.getElementById("filterLevel").value;
+      const ack = document.getElementById("filterAck").value;
+      const text = document.getElementById("filterText").value.toLowerCase();
+      const source = window._allAlerts || [];
+
+      const filtered = source.filter(a => {
+        if (level && a.level !== level) return false;
+        if (ack === "acked" && !a.acknowledged) return false;
+        if (ack === "unacked" && a.acknowledged) return false;
+        if (text && ![(a.message || ""), (a.agent_id || ""), (a.type || "")]
+          .join(" ").toLowerCase().includes(text)) return false;
+        return true;
+      });
+      renderFullAlerts(filtered);
+      document.getElementById("alertsBadge2").textContent = filtered.length;
+    }
+    window.applyFilter = applyFilter;
+
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+
+</html>

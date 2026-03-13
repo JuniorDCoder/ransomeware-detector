@@ -1,0 +1,4 @@
+[console_scripts]
+rds-agent = agents.agent_client:main
+rds-dashboard = dashboard.app:main
+rds-server = server.main_server:main

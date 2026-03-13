@@ -1,0 +1,14 @@
+{
+  "server_url": "http://localhost:5000",
+  "agent_id": "agent-001",
+  "watch_paths": ["."],
+  "scan_on_connect": true,
+  "heartbeat_interval": 5,
+  "entropy_threshold": 7.5,
+  "file_change_rate_threshold": 120,
+  "file_change_window_seconds": 60,
+  "network_connection_threshold": 200,
+  "enable_external_device_monitor": true,
+  "enable_network_monitor": true,
+  "enable_file_monitor": true
+}
